@@ -137,8 +137,8 @@ class BertConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
-        self.embedding_size = embedding_size,
-        self.normalization_type = normalization_type,
+        self.embedding_size = embedding_size
+        self.normalization_type = normalization_type
 
 class BertOnnxConfig(OnnxConfig):
     @property
