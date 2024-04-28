@@ -117,6 +117,7 @@ class BertConfig(PretrainedConfig):
         use_cache=True,
         classifier_dropout=None,
         embedding_size=None,
+        normalization_type="layer_norm",
         **kwargs,
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
@@ -136,8 +137,8 @@ class BertConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
-        self.embedding_size = embedding_size
-
+        self.embedding_size = embedding_size,
+        self.normalization_type = normalization_type,
 
 class BertOnnxConfig(OnnxConfig):
     @property
