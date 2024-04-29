@@ -738,12 +738,19 @@ class TFBertLMPredictionHead(keras.layers.Layer):
 
         self.config = config
         self.hidden_size = config.hidden_size
+        self.embedding_size = config.embedding_size
 
         self.transform = TFBertPredictionHeadTransform(config, name="transform")
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         self.input_embeddings = input_embeddings
+
+        if self.hidden_size != self.embedding_size:
+            self.projection = keras.layers.Dense(self.embedding_size, name="projection")
+        else:
+            self.projection = None
+
 
     def build(self, input_shape=None):
         self.bias = self.add_weight(shape=(self.config.vocab_size,), initializer="zeros", trainable=True, name="bias")
@@ -754,6 +761,9 @@ class TFBertLMPredictionHead(keras.layers.Layer):
         if getattr(self, "transform", None) is not None:
             with tf.name_scope(self.transform.name):
                 self.transform.build(None)
+        if self.projection:
+            self.projection.build(input_shape)
+
 
     def get_output_embeddings(self) -> keras.layers.Layer:
         return self.input_embeddings
@@ -771,8 +781,11 @@ class TFBertLMPredictionHead(keras.layers.Layer):
 
     def call(self, hidden_states: tf.Tensor) -> tf.Tensor:
         hidden_states = self.transform(hidden_states=hidden_states)
+        if self.projection:
+            hidden_states = self.projection(hidden_states)
+
         seq_length = shape_list(hidden_states)[1]
-        hidden_states = tf.reshape(tensor=hidden_states, shape=[-1, self.hidden_size])
+        hidden_states = tf.reshape(tensor=hidden_states, shape=[-1, self.embedding_size])
         hidden_states = tf.matmul(a=hidden_states, b=self.input_embeddings.weight, transpose_b=True)
         hidden_states = tf.reshape(tensor=hidden_states, shape=[-1, seq_length, self.config.vocab_size])
         hidden_states = tf.nn.bias_add(value=hidden_states, bias=self.bias)
