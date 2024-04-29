@@ -762,7 +762,7 @@ class TFBertLMPredictionHead(keras.layers.Layer):
             with tf.name_scope(self.transform.name):
                 self.transform.build(None)
         if self.projection:
-            self.projection.build([None, None, self.embedding_size])
+            self.projection.build([None, None, self.hidden_size])
 
     def get_output_embeddings(self) -> keras.layers.Layer:
         return self.input_embeddings
