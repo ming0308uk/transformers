@@ -131,14 +131,17 @@ class TFBertEmbeddings(keras.layers.Layer):
         self.hidden_size = config.hidden_size
         self.max_position_embeddings = config.max_position_embeddings
         self.initializer_range = config.initializer_range
-        self.LayerNorm = keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
+        self.LayerNorm = NORM2FN[config.normalization_type](epsilon=config.layer_norm_eps, name="LayerNorm")
         self.dropout = keras.layers.Dropout(rate=config.hidden_dropout_prob)
+        self.embedding_size = config.embedding_size
+        self.embedding_transformation = keras.layers.Dense(config.hidden_size, name="embedding_transformation")
+
 
     def build(self, input_shape=None):
         with tf.name_scope("word_embeddings"):
             self.weight = self.add_weight(
                 name="weight",
-                shape=[self.config.vocab_size, self.hidden_size],
+                shape=[self.config.vocab_size, self.embedding_size],
                 initializer=get_initializer(self.initializer_range),
             )
 
@@ -162,6 +165,9 @@ class TFBertEmbeddings(keras.layers.Layer):
         if getattr(self, "LayerNorm", None) is not None:
             with tf.name_scope(self.LayerNorm.name):
                 self.LayerNorm.build([None, None, self.config.hidden_size])
+        if getattr(self, "embedding_transformation", None) is not None:
+            with tf.name_scope(self.embedding_transformation.name):
+                self.embedding_transformation.build([None, None, self.embedded_input_size])
 
     def call(
         self,
@@ -189,6 +195,9 @@ class TFBertEmbeddings(keras.layers.Layer):
 
         if token_type_ids is None:
             token_type_ids = tf.fill(dims=input_shape, value=0)
+
+        if self.embedding_size != self.hidden_size:
+            inputs_embeds = self.embedding_transformation(inputs_embeds)
 
         if position_ids is None:
             position_ids = tf.expand_dims(
@@ -343,7 +352,7 @@ class TFBertSelfOutput(keras.layers.Layer):
         self.dense = keras.layers.Dense(
             units=config.hidden_size, kernel_initializer=get_initializer(config.initializer_range), name="dense"
         )
-        self.LayerNorm = keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
+        self.LayerNorm = NORM2FN[config.normalization_type](epsilon=config.layer_norm_eps, name="LayerNorm")
         self.dropout = keras.layers.Dropout(rate=config.hidden_dropout_prob)
         self.config = config
 
@@ -453,7 +462,7 @@ class TFBertOutput(keras.layers.Layer):
         self.dense = keras.layers.Dense(
             units=config.hidden_size, kernel_initializer=get_initializer(config.initializer_range), name="dense"
         )
-        self.LayerNorm = keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
+        self.LayerNorm = NORM2FN[config.normalization_type](epsilon=config.layer_norm_eps, name="LayerNorm")
         self.dropout = keras.layers.Dropout(rate=config.hidden_dropout_prob)
         self.config = config
 
@@ -701,7 +710,7 @@ class TFBertPredictionHeadTransform(keras.layers.Layer):
         else:
             self.transform_act_fn = config.hidden_act
 
-        self.LayerNorm = keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
+        self.LayerNorm = NORM2FN[config.normalization_type](epsilon=config.layer_norm_eps, name="LayerNorm")
         self.config = config
 
     def call(self, hidden_states: tf.Tensor) -> tf.Tensor:
@@ -2112,3 +2121,19 @@ class TFBertForQuestionAnswering(TFBertPreTrainedModel, TFQuestionAnsweringLoss)
         if getattr(self, "qa_outputs", None) is not None:
             with tf.name_scope(self.qa_outputs.name):
                 self.qa_outputs.build([None, None, self.config.hidden_size])
+
+class TFNoNorm(keras.layers.Layer):
+    def __init__(self, feat_size, epsilon=None, **kwargs):
+        super().__init__(**kwargs)
+        self.feat_size = feat_size
+
+    def build(self, input_shape):
+        self.bias = self.add_weight("bias", shape=[self.feat_size], initializer="zeros")
+        self.weight = self.add_weight("weight", shape=[self.feat_size], initializer="ones")
+        super().build(input_shape)
+
+    def call(self, inputs: tf.Tensor):
+        return inputs * self.weight + self.bias
+
+
+NORM2FN = {"layer_norm": keras.layers.LayerNormalization, "no_norm": TFNoNorm}
