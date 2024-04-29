@@ -167,7 +167,7 @@ class TFBertEmbeddings(keras.layers.Layer):
                 self.LayerNorm.build([None, None, self.config.hidden_size])
         if getattr(self, "embedding_transformation", None) is not None:
             with tf.name_scope(self.embedding_transformation.name):
-                self.embedding_transformation.build([None, None, self.embedded_input_size])
+                self.embedding_transformation.build([None, None, self.embedding_size])
 
     def call(
         self,
